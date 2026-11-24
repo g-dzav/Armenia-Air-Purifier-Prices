@@ -9,7 +9,7 @@ and a shareable live dashboard.
 - **Database**: Supabase (hosted Postgres). Schema in [`db/schema.sql`](db/schema.sql).
 - **Daily scrape**: GitHub Actions ([`.github/workflows/daily-scrape.yml`](.github/workflows/daily-scrape.yml))
   runs [`scraper/run_daily.py`](scraper/run_daily.py) every morning — fully automated, no server to maintain.
-- **Dashboard**: a static page ([`dashboard/index.html`](dashboard/index.html)) that reads
+- **Dashboard**: a static page ([`docs/index.html`](docs/index.html)) that reads
   straight from Supabase in the browser. Deploy it with GitHub Pages and the
   URL is your shareable link — anyone with it sees live data, no login.
 - **Weekly manual pass**: [`scraper/run_manual_weekly.py`](scraper/run_manual_weekly.py), run on

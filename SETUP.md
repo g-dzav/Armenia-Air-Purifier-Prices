@@ -11,7 +11,7 @@ accounts or paste in secrets for you, so this part's manual, but it's quick.
    [`db/schema.sql`](db/schema.sql) → Run.
 3. **Project Settings → API**. You need three values:
    - `Project URL` → this is `SUPABASE_URL`
-   - `anon` `public` key → safe to put directly in `dashboard/index.html` (that's what it's for)
+   - `anon` `public` key → safe to put directly in `docs/index.html` (that's what it's for)
    - `service_role` key → **secret**, never put this in the dashboard or commit it. Goes into GitHub Actions secrets and your local `.env` only.
 
 ## 2. GitHub (the repo + the daily cron + the dashboard hosting)
@@ -29,9 +29,12 @@ accounts or paste in secrets for you, so this part's manual, but it's quick.
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
 4. **Repo → Settings → Pages**. Source: "Deploy from a branch", branch `main`,
-   folder `/dashboard`. Save. GitHub gives you a URL like
-   `https://<you>.github.io/<repo>/` — that's the link to share.
-5. Edit `dashboard/index.html`, fill in `SUPABASE_URL` and `SUPABASE_ANON_KEY`
+   folder `/docs` (GitHub's branch-deploy option only supports `/` or `/docs`,
+   never an arbitrary folder name — that's why this project's dashboard
+   folder is called `docs` rather than something more descriptive). Save.
+   GitHub gives you a URL like `https://<you>.github.io/<repo>/` — that's
+   the link to share.
+5. Edit `docs/index.html`, fill in `SUPABASE_URL` and `SUPABASE_ANON_KEY`
    at the top of the `<script>` block, commit, push.
 6. **Repo → Actions tab** — the daily workflow is already there
    (`.github/workflows/daily-scrape.yml`), scheduled for 06:00 Yerevan time.
