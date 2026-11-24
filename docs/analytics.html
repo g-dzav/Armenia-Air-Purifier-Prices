@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Armenia Air Purifier Prices — Analytics</title>
+<style>
+  :root {
+    --bg: #eef1f4; --panel: #ffffff; --panel-alt: #f7f9fb; --grid-line: #c6ccd3;
+    --header-bg: #e9edf1; --header-text: #3c4550; --text: #1f2328; --text-dim: #5f6b7a;
+    --accent: #1565c0;
+    /* Categorical palette (validated set, fixed order — identity, never re-ordered by a filter) */
+    --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100;
+    --cat-5: #e87ba4; --cat-6: #008300; --cat-7: #4a3aa7; --cat-8: #e34948;
+    --status-good: #0ca30c; --status-critical: #d03b3b;
+    --gridline-hairline: #e1e0d9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--text);
+    font-family: Calibri, "Segoe UI", Arial, sans-serif; font-size: 13px;
+  }
+  header { padding: 18px 24px 10px; display:flex; align-items:flex-start; gap:12px; }
+  h1 { font-size: 17px; margin: 0 0 2px; font-weight:700; }
+  .sub { color: var(--text-dim); font-size: 12px; }
+  .nav-link { color: var(--accent); font-size:12.5px; text-decoration:none; margin-left:auto; align-self:center; }
+  .nav-link:hover { text-decoration:underline; }
+  .sign-out { color: var(--text-dim); font-size:12px; background:none; border:1px solid var(--grid-line); border-radius:4px; cursor:pointer; padding:5px 10px; }
+  .sign-out:hover { background: var(--panel-alt); }
+
+  main { padding: 8px 24px 40px; }
+
+  .stat-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+  .stat-tile {
+    background:var(--panel); border:1px solid var(--grid-line); border-radius:6px;
+    padding:12px 16px; flex:1; min-width:140px;
+  }
+  .stat-tile .label { color:var(--text-dim); font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; }
+  .stat-tile .value { font-size:24px; font-weight:700; margin-top:4px; }
+
+  .charts-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap:16px; }
+  .chart-panel {
+    background:var(--panel); border:1px solid var(--grid-line); border-radius:6px; padding:16px;
+  }
+  .chart-panel h2 { font-size:13px; margin:0 0 2px; font-weight:700; }
+  .chart-panel .chart-sub { color:var(--text-dim); font-size:11.5px; margin-bottom:12px; }
+
+  .bar-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+  .bar-label { width:110px; flex-shrink:0; font-size:12px; text-align:right; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar-track { flex:1; background:var(--panel-alt); border-radius:4px; height:20px; position:relative; }
+  .bar-fill { height:20px; border-radius:4px; min-width:2px; }
+  .bar-value { position:absolute; left:calc(100% + 8px); top:50%; transform:translateY(-50%); font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--text-dim); white-space:nowrap; }
+
+  .legend { display:flex; gap:14px; flex-wrap:wrap; margin-top:10px; font-size:11.5px; color:var(--text-dim); }
+  .legend .swatch { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:middle; }
+
+  .chart-tooltip {
+    position:absolute; background:#1f2328; color:#fff; font-size:11.5px; padding:5px 9px;
+    border-radius:4px; pointer-events:none; z-index:60; white-space:nowrap;
+  }
+
+  svg.linechart { width:100%; height:220px; overflow:visible; }
+  .empty-chart { color:var(--text-dim); font-size:12px; padding:30px 10px; text-align:center; }
+
+  .auth-screen { max-width: 340px; margin: 18vh auto; padding: 0 20px; text-align:center; }
+  .auth-screen h1 { font-size: 17px; margin-bottom: 16px; }
+  .auth-screen input {
+    width:100%; background: #fff; border:1px solid var(--grid-line); color:var(--text);
+    padding: 9px 11px; border-radius: 4px; font-size: 13px; margin-bottom: 10px; font-family: inherit;
+  }
+  .auth-screen button {
+    width:100%; background: var(--accent); color:#fff; border:none; font-weight:600;
+    padding: 9px 11px; border-radius: 4px; font-size: 13px; cursor:pointer; font-family: inherit;
+  }
+  .auth-status { color: var(--text-dim); font-size: 12px; margin-top: 10px; min-height: 18px; }
+</style>
+</head>
+<body>
+
+<div id="authGate" class="auth-screen">
+  <h1>Armenia Air Purifier Prices</h1>
+  <p class="sub" style="margin-bottom:16px">Sign in with the email your admin added — you'll get a one-time link, no password to remember.</p>
+  <input id="authEmail" type="email" placeholder="you@example.com" autocomplete="email">
+  <button id="authSubmit">Send sign-in link</button>
+  <div class="auth-status" id="authStatus"></div>
+</div>
+
+<div id="app" style="display:none">
+<header>
+  <div>
+    <h1>Analytics</h1>
+    <div class="sub">A one-screen snapshot of the price-tracking data &middot; same database as the main table</div>
+  </div>
+  <a class="nav-link" href="index.html">⬅ Back to table</a>
+  <button class="sign-out" id="signOut">Sign out</button>
+</header>
+
+<main>
+  <div class="stat-row" id="statRow"></div>
+  <div class="charts-grid">
+    <div class="chart-panel">
+      <h2>Average price by retailer</h2>
+      <div class="chart-sub">Across all currently tracked products, AMD</div>
+      <div id="chartPriceBySite"></div>
+    </div>
+    <div class="chart-panel">
+      <h2>Products tracked by brand</h2>
+      <div class="chart-sub">Top brands by number of listings</div>
+      <div id="chartCountByBrand"></div>
+    </div>
+    <div class="chart-panel">
+      <h2>Stock availability</h2>
+      <div class="chart-sub">Across the most recent snapshot of every product</div>
+      <div id="chartStock"></div>
+    </div>
+    <div class="chart-panel">
+      <h2>Average price over time</h2>
+      <div class="chart-sub">By retailer, one point per day scraped</div>
+      <div id="chartTrend"></div>
+    </div>
+  </div>
+</main>
+</div><!-- #app -->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = "https://tnuatwacrkygbjwjeljp.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_YlpsZ72PY7Y1TfjDrCoNOA_Sk9rwh6Q";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const CAT_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
+
+// Color assignment is fixed once per page load, by alphabetical site name —
+// so a series' color never shifts when a chart's own data changes shape
+// (the "color follows the entity" rule).
+let siteColorMap = {};
+function colorForSite(site) {
+  if (!(site in siteColorMap)) siteColorMap[site] = CAT_COLORS[Object.keys(siteColorMap).length % CAT_COLORS.length];
+  return siteColorMap[site];
+}
+
+let tooltipEl = null;
+function showTooltip(evt, text) {
+  if (!tooltipEl) {
+    tooltipEl = document.createElement("div");
+    tooltipEl.className = "chart-tooltip";
+    document.body.appendChild(tooltipEl);
+  }
+  tooltipEl.textContent = text;
+  tooltipEl.style.left = (evt.pageX + 12) + "px";
+  tooltipEl.style.top = (evt.pageY + 8) + "px";
+  tooltipEl.style.display = "block";
+}
+function hideTooltip() { if (tooltipEl) tooltipEl.style.display = "none"; }
+
+function fmtAmd(n) { return Math.round(n).toLocaleString("en-US") + " ֏"; }
+
+// ---------- Horizontal bar chart (plain HTML/CSS — simpler than SVG here,
+// still meets the mark spec: <=20px thick, rounded ends, one baseline) ----------
+function renderBarChart(container, rows, { valueFmt = (v) => v.toLocaleString("en-US") } = {}) {
+  container.innerHTML = "";
+  if (!rows.length) {
+    container.innerHTML = '<div class="empty-chart">No data yet.</div>';
+    return;
+  }
+  const max = Math.max(...rows.map(r => r.value), 1);
+  for (const row of rows) {
+    const wrap = document.createElement("div");
+    wrap.className = "bar-row";
+    const pct = Math.max((row.value / max) * 100, 1);
+    wrap.innerHTML = `
+      <div class="bar-label" title="${row.label}">${row.label}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${pct}%; background:${row.color}"></div>
+        <span class="bar-value">${valueFmt(row.value)}</span>
+      </div>
+    `;
+    const fill = wrap.querySelector(".bar-fill");
+    fill.addEventListener("mousemove", (e) => showTooltip(e, `${row.label}: ${valueFmt(row.value)}`));
+    fill.addEventListener("mouseleave", hideTooltip);
+    container.appendChild(wrap);
+  }
+}
+
+// ---------- Simple multi-series line chart (SVG) ----------
+function renderLineChart(container, series, { valueFmt = (v) => v.toLocaleString("en-US") } = {}) {
+  container.innerHTML = "";
+  const allPoints = series.flatMap(s => s.points);
+  if (allPoints.length === 0) {
+    container.innerHTML = '<div class="empty-chart">Not enough price history yet — check back after a few daily runs.</div>';
+    return;
+  }
+
+  const W = container.clientWidth || 500, H = 220;
+  const padL = 46, padR = 12, padT = 10, padB = 24;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  const allDates = [...new Set(allPoints.map(p => p.x))].sort();
+  const xIndex = Object.fromEntries(allDates.map((d, i) => [d, i]));
+  const xScale = (d) => allDates.length <= 1 ? padL + plotW / 2 : padL + (xIndex[d] / (allDates.length - 1)) * plotW;
+
+  const values = allPoints.map(p => p.y);
+  let yMin = Math.min(...values), yMax = Math.max(...values);
+  if (yMin === yMax) { yMin -= 1; yMax += 1; }
+  const yPad = (yMax - yMin) * 0.1;
+  yMin -= yPad; yMax += yPad;
+  const yScale = (v) => padT + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+
+  const gridLines = 4;
+  let gridHtml = "";
+  for (let i = 0; i <= gridLines; i++) {
+    const y = padT + (plotH / gridLines) * i;
+    const val = yMax - ((yMax - yMin) / gridLines) * i;
+    gridHtml += `<line x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}" stroke="#e1e0d9" stroke-width="1"/>`;
+    gridHtml += `<text x="${padL - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#5f6b7a">${Math.round(val).toLocaleString("en-US")}</text>`;
+  }
+
+  let seriesHtml = "";
+  let legendHtml = "";
+  series.forEach(s => {
+    if (s.points.length === 0) return;
+    const sorted = [...s.points].sort((a, b) => a.x.localeCompare(b.x));
+    const path = sorted.map((p, i) => `${i === 0 ? "M" : "L"} ${xScale(p.x)} ${yScale(p.y)}`).join(" ");
+    seriesHtml += `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    sorted.forEach(p => {
+      seriesHtml += `<circle cx="${xScale(p.x)}" cy="${yScale(p.y)}" r="4" fill="${s.color}" stroke="#fff" stroke-width="2"
+        class="trend-dot" data-label="${s.label}: ${valueFmt(p.y)} on ${p.x}"/>`;
+    });
+    legendHtml += `<span><span class="swatch" style="background:${s.color}"></span>${s.label}</span>`;
+  });
+
+  const xLabels = allDates.length <= 6 ? allDates : [allDates[0], allDates[allDates.length - 1]];
+  let xLabelHtml = "";
+  xLabels.forEach(d => {
+    xLabelHtml += `<text x="${xScale(d)}" y="${H - 4}" text-anchor="middle" font-size="10" fill="#5f6b7a">${d}</text>`;
+  });
+
+  container.innerHTML = `
+    <svg class="linechart" viewBox="0 0 ${W} ${H}">
+      ${gridHtml}
+      ${seriesHtml}
+      ${xLabelHtml}
+    </svg>
+    <div class="legend">${legendHtml}</div>
+  `;
+  container.querySelectorAll(".trend-dot").forEach(dot => {
+    dot.addEventListener("mousemove", (e) => showTooltip(e, dot.getAttribute("data-label")));
+    dot.addEventListener("mouseleave", hideTooltip);
+  });
+}
+
+function renderStatTile(label, value) {
+  const tile = document.createElement("div");
+  tile.className = "stat-tile";
+  tile.innerHTML = `<div class="label">${label}</div><div class="value">${value}</div>`;
+  return tile;
+}
+
+async function loadAnalytics() {
+  const [{ data: latest, error: e1 }, { data: products }, { data: snapshots }] = await Promise.all([
+    sb.from("latest_prices").select("*"),
+    sb.from("products").select("id, site, brand"),
+    sb.from("price_snapshots").select("product_id, price_amd, scraped_at").order("scraped_at", { ascending: true }),
+  ]);
+
+  if (e1 || !latest) {
+    document.querySelector("main").innerHTML = '<div class="empty-chart">Could not load analytics data.</div>';
+    return;
+  }
+
+  // ---------- Stat tiles ----------
+  const statRow = document.getElementById("statRow");
+  statRow.innerHTML = "";
+  const sites = new Set(latest.map(r => r.site));
+  const prices = latest.map(r => r.price_amd).filter(p => p != null);
+  const avgPrice = prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0;
+  const inStockCount = latest.filter(r => r.in_stock === true).length;
+  const knownStockCount = latest.filter(r => r.in_stock !== null && r.in_stock !== undefined).length;
+
+  statRow.appendChild(renderStatTile("Products tracked", latest.length));
+  statRow.appendChild(renderStatTile("Retailers", sites.size));
+  statRow.appendChild(renderStatTile("Average price", fmtAmd(avgPrice)));
+  statRow.appendChild(renderStatTile(
+    "In stock",
+    knownStockCount ? Math.round((inStockCount / knownStockCount) * 100) + "%" : "—"
+  ));
+
+  // ---------- Average price by retailer ----------
+  const bySite = {};
+  latest.forEach(r => {
+    if (r.price_amd == null) return;
+    (bySite[r.site] ||= []).push(r.price_amd);
+  });
+  const priceBySiteRows = Object.entries(bySite)
+    .map(([site, vals]) => ({ label: site, value: vals.reduce((a, b) => a + b, 0) / vals.length, color: colorForSite(site) }))
+    .sort((a, b) => b.value - a.value);
+  renderBarChart(document.getElementById("chartPriceBySite"), priceBySiteRows, { valueFmt: fmtAmd });
+
+  // ---------- Product count by brand (top 7 + Other) ----------
+  const byBrand = {};
+  latest.forEach(r => {
+    const b = r.brand || "Unknown";
+    byBrand[b] = (byBrand[b] || 0) + 1;
+  });
+  let brandRows = Object.entries(byBrand).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+  if (brandRows.length > 8) {
+    const head = brandRows.slice(0, 7);
+    const otherCount = brandRows.slice(7).reduce((a, r) => a + r.value, 0);
+    brandRows = [...head, { label: "Other", value: otherCount }];
+  }
+  brandRows.forEach((r, i) => r.color = CAT_COLORS[i % CAT_COLORS.length]);
+  renderBarChart(document.getElementById("chartCountByBrand"), brandRows);
+
+  // ---------- Stock availability (status colors, reserved for state) ----------
+  const outOfStockCount = latest.filter(r => r.in_stock === false).length;
+  const unknownCount = latest.length - inStockCount - outOfStockCount;
+  const stockRows = [
+    { label: "In stock", value: inStockCount, color: "var(--status-good)" },
+    { label: "Out of stock", value: outOfStockCount, color: "var(--status-critical)" },
+  ];
+  if (unknownCount > 0) stockRows.push({ label: "Unknown", value: unknownCount, color: "#9aa3ad" });
+  renderBarChart(document.getElementById("chartStock"), stockRows);
+
+  // ---------- Price trend over time, by retailer ----------
+  const productSite = Object.fromEntries((products || []).map(p => [p.id, p.site]));
+  const bySiteDay = {}; // site -> day -> [prices]
+  (snapshots || []).forEach(s => {
+    const site = productSite[s.product_id];
+    if (!site || s.price_amd == null) return;
+    const day = s.scraped_at.slice(0, 10);
+    ((bySiteDay[site] ||= {})[day] ||= []).push(s.price_amd);
+  });
+  const trendSeries = Object.entries(bySiteDay).map(([site, byDay]) => ({
+    label: site,
+    color: colorForSite(site),
+    points: Object.entries(byDay).map(([day, vals]) => ({ x: day, y: vals.reduce((a, b) => a + b, 0) / vals.length })),
+  }));
+  renderLineChart(document.getElementById("chartTrend"), trendSeries, { valueFmt: fmtAmd });
+}
+
+function showApp() {
+  document.getElementById("authGate").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  loadAnalytics();
+}
+function showAuthGate() {
+  document.getElementById("app").style.display = "none";
+  document.getElementById("authGate").style.display = "block";
+}
+
+document.getElementById("authSubmit").addEventListener("click", async () => {
+  const email = document.getElementById("authEmail").value.trim();
+  const statusEl = document.getElementById("authStatus");
+  if (!email) { statusEl.textContent = "Enter your email first."; return; }
+  statusEl.textContent = "Sending...";
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+  statusEl.textContent = error ? "Couldn't send link: " + error.message : "Check your email for a sign-in link.";
+});
+
+document.getElementById("signOut").addEventListener("click", async () => {
+  await sb.auth.signOut();
+  showAuthGate();
+});
+
+sb.auth.onAuthStateChange((_event, session) => { if (session) showApp(); else showAuthGate(); });
+sb.auth.getSession().then(({ data: { session } }) => { if (session) showApp(); else showAuthGate(); });
+</script>
+</body>
+</html>
