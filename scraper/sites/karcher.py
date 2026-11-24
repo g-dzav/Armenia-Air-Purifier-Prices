@@ -33,6 +33,7 @@ def scrape() -> list[ScrapedProduct]:
             product_url=f"https://karchershop.am/products/{p['handle']}",
             price_amd=price_amd,
             brand="Karcher",
+            model=variant.get("sku") or None,
             image_url=image_url,
             list_price_amd=list_price_amd,
             in_stock=variant.get("available", True),

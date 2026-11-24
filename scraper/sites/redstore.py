@@ -72,6 +72,7 @@ def scrape() -> list[ScrapedProduct]:
             product_url=url,
             price_amd=float(offer["price"]) if offer.get("price") else None,
             brand=(data.get("brand") or {}).get("name"),
+            model=data.get("sku"),
             image_url=data.get("image"),
             in_stock="InStock" in (offer.get("availability") or ""),
         ))

@@ -99,9 +99,9 @@
   <div class="stat-row" id="statRow"></div>
   <div class="charts-grid">
     <div class="chart-panel">
-      <h2>Average price by retailer</h2>
-      <div class="chart-sub">Across all currently tracked products, AMD</div>
-      <div id="chartPriceBySite"></div>
+      <h2>Average price by product model</h2>
+      <div class="chart-sub">Grouped by manufacturer SKU where known (lets the same model sold by two retailers average together) — otherwise one bar per listing</div>
+      <div id="chartPriceByModel" style="max-height:340px; overflow-y:auto; padding-right:4px"></div>
     </div>
     <div class="chart-panel">
       <h2>Products tracked by brand</h2>
@@ -285,16 +285,25 @@ async function loadAnalytics() {
     knownStockCount ? Math.round((inStockCount / knownStockCount) * 100) + "%" : "—"
   ));
 
-  // ---------- Average price by retailer ----------
-  const bySite = {};
+  // ---------- Average price by product model ----------
+  // Most sites don't expose a manufacturer SKU, so this groups by `model`
+  // where the scraper found one (e.g. Karcher's SKU format matches across
+  // both Karcher's own store and VLV, so that model's bar is a genuine
+  // cross-retailer average) and falls back to the product name otherwise —
+  // every product still shows up, just not averaged with anything.
+  const byModel = {};
   latest.forEach(r => {
     if (r.price_amd == null) return;
-    (bySite[r.site] ||= []).push(r.price_amd);
+    const key = r.model || r.name;
+    (byModel[key] ||= { label: r.model ? `${key} (${r.brand || "?"})` : key, prices: [] }).prices.push(r.price_amd);
   });
-  const priceBySiteRows = Object.entries(bySite)
-    .map(([site, vals]) => ({ label: site, value: vals.reduce((a, b) => a + b, 0) / vals.length, color: colorForSite(site) }))
+  const priceByModelRows = Object.values(byModel)
+    .map(({ label, prices }) => ({
+      label, value: prices.reduce((a, b) => a + b, 0) / prices.length,
+      color: "#2a78d6", // single hue — this is one measure across many individual products, not a category comparison
+    }))
     .sort((a, b) => b.value - a.value);
-  renderBarChart(document.getElementById("chartPriceBySite"), priceBySiteRows, { valueFmt: fmtAmd });
+  renderBarChart(document.getElementById("chartPriceByModel"), priceByModelRows, { valueFmt: fmtAmd });
 
   // ---------- Product count by brand (top 7 + Other) ----------
   const byBrand = {};

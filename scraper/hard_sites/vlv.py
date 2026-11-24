@@ -21,8 +21,28 @@ not list items that are out of stock, so in_stock is left unset here.
 """
 from __future__ import annotations
 
+import re
+
 from ..normalize import parse_amd
 from ..sites.base import ScrapedProduct
+
+# VLV doesn't expose a separate SKU field — it's just appended to the product
+# name, e.g. "KARCHER AF20 1.024-820.0" or "...4 Compact (BHR5860EU)". Those
+# two patterns are common enough across their catalog (and match the exact
+# SKU format Karcher's own store uses) to be worth pulling out, since it lets
+# the same physical product sold by two retailers group together correctly.
+_MODEL_PATTERNS = [
+    re.compile(r"\((\w[\w-]{3,})\)\s*$"),   # "... (BHR5860EU)"
+    re.compile(r"(\d\.\d{3}-\d{3}\.\d)\s*$"),  # "... 1.024-820.0" (Karcher SKU format)
+]
+
+
+def _extract_model(name: str) -> str | None:
+    for pattern in _MODEL_PATTERNS:
+        m = pattern.search(name)
+        if m:
+            return m.group(1)
+    return None
 
 SITE_NAME = "vlv"
 LISTING_URL = "https://vlv.am/en/category/filter/air-purifiers"
@@ -63,6 +83,7 @@ def scrape(driver) -> list[ScrapedProduct]:
             product_url=item["href"],
             price_amd=price_amd,
             brand=(item.get("brand") or "").title() or None,
+            model=_extract_model(item["name"]),
             list_price_amd=list_price_amd,
         ))
     return products
