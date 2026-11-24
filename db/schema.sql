@@ -68,8 +68,32 @@ create table if not exists site_sessions (
 );
 
 -- Convenience view: latest snapshot per product, joined with product info.
+-- Explicit column list (rather than p.*, s.*) because both tables have an
+-- `id` column, which errors as an ambiguous duplicate in a wildcard select.
 create or replace view latest_prices as
-select p.*, s.*
+select
+  p.id,
+  p.site,
+  p.external_id,
+  p.brand,
+  p.model,
+  p.name,
+  p.product_url,
+  p.image_url,
+  p.first_seen_at,
+  s.id as snapshot_id,
+  s.scraped_at,
+  s.price_amd,
+  s.list_price_amd,
+  s.in_stock,
+  s.rating,
+  s.review_count,
+  s.shipping_price_amd,
+  s.shipping_time_text,
+  s.price_usd,
+  s.price_kzt,
+  s.fx_rate_date,
+  s.source
 from products p
 join lateral (
   select *
