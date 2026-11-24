@@ -3,9 +3,12 @@ from __future__ import annotations
 import re
 
 KNOWN_BRANDS = [
-    "Xiaomi", "Dyson", "Karcher", "Kärcher", "Philips", "Beurer", "Levoit",
-    "Ballu", "Boneco", "AENO", "Tesla", "Electrolux", "Samsung", "Sharp",
-    "Panasonic", "Viomi", "Smartmi", "Deerma", "Ufesa",
+    # Multi-word brands must come before any single-word brand that's also
+    # a substring of them (e.g. "Green Lion" before anything starting "Green").
+    "Green Lion", "Xiaomi", "Dyson", "Karcher", "Kärcher", "Philips", "Beurer",
+    "Levoit", "Ballu", "Boneco", "AENO", "Tesla", "Electrolux", "Samsung",
+    "Sharp", "Panasonic", "Viomi", "Smartmi", "Deerma", "Ufesa", "Porodo",
+    "Powerology", "Honeywell", "LG", "Renon", "Vitesy", "Blueair",
 ]
 
 

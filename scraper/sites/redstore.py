@@ -1,15 +1,12 @@
 """redstore.am — Next.js storefront. The category grid is client-rendered
 (no plain-HTML product links), but each product PAGE is server-rendered
-with a clean schema.org JSON-LD block. So: use Playwright just to discover
-the product URLs in the category page (headless, no challenge to solve),
-then fetch each product page with plain httpx and read its JSON-LD —
-much cheaper than rendering every product page in a browser.
+with a clean schema.org JSON-LD block. So: use a headless browser just to
+discover the product URLs in the category page (no challenge to solve,
+just JS rendering), then fetch each product page with plain httpx and read
+its JSON-LD — much cheaper than rendering every product page in a browser.
 
-NOTE: not verified end-to-end against a live run yet (Playwright isn't
-available in the environment this was written in) — the category-page
-selector below (`a[href*="/product/"]`) is a reasonable guess based on the
-URL pattern seen on product pages; confirm it still matches on first run
-and adjust if RedStore's markup differs.
+Verified end-to-end Nov 2026 — `a[href*="/product/"]` correctly matches the
+category grid's product links once rendered.
 """
 from __future__ import annotations
 
@@ -17,7 +14,10 @@ import json
 import re
 
 import httpx
-from playwright.sync_api import sync_playwright
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from ..normalize import slug_from_url
 from .base import ScrapedProduct
@@ -28,14 +28,19 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; price-tracker/1.0)"}
 
 
 def _discover_product_urls() -> list[str]:
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch()
-        page = browser.new_page(user_agent=HEADERS["User-Agent"])
-        page.goto(LISTING_URL, wait_until="networkidle", timeout=30_000)
-        hrefs = page.eval_on_selector_all(
-            'a[href*="/product/"]', "els => els.map(e => e.href)"
+    opts = Options()
+    opts.add_argument("--headless=new")
+    driver = webdriver.Chrome(options=opts)
+    try:
+        driver.get(LISTING_URL)
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located(("css selector", 'a[href*="/product/"]'))
         )
-        browser.close()
+        hrefs = driver.execute_script(
+            """return [...document.querySelectorAll('a[href*="/product/"]')].map(e => e.href)"""
+        )
+    finally:
+        driver.quit()
     return sorted(set(hrefs))
 
 

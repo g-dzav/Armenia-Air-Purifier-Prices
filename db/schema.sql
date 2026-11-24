@@ -143,4 +143,4 @@ grant select on products, price_snapshots, fx_rates, scrape_runs, latest_prices 
 -- service_role bypasses RLS but still needs the object-level grant to touch
 -- these tables at all. It's the scraper's own key — full read/write on
 -- everything, including site_sessions (holds cookies), which anon never gets.
-grant all on products, price_snapshots, fx_rates, scrape_runs, site_sessions to service_role;
+grant all on products, price_snapshots, fx_rates, scrape_runs, site_sessions, latest_prices to service_role;

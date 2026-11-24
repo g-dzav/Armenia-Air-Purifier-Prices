@@ -17,9 +17,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          playwright install --with-deps chromium
+        run: pip install -r requirements.txt
+        # Chrome ships preinstalled on ubuntu-latest runners, and Selenium
+        # 4.6+'s built-in driver manager auto-downloads a matching
+        # chromedriver on first use — no separate browser install step.
 
       - name: Run daily scrape
         env:

@@ -11,7 +11,7 @@ from .fx import fetch_and_store_today
 from .store import store_products
 from .sites import karcher, microless, redstore, threedplanet, vega
 from .hard_sites import eldorado, homemart, ozon, vlv, wildberries, zigzag, allsell
-from .hard_sites.playwright_base import run_automated, try_automated_with_saved_cookies
+from .hard_sites.browser_base import run_automated, try_automated_with_saved_cookies
 
 EASY_TIER = [microless, vega, threedplanet, karcher, redstore]
 AUTOMATED_NO_CHALLENGE = [vlv]

@@ -5,6 +5,12 @@ browser that's already past the challenge). Tries structured data first
 Armenian e-commerce sites include for SEO even behind Cloudflare), then
 falls back to a price-pattern heuristic over the rendered DOM.
 
+Takes a Selenium WebDriver (not a Playwright Page — see browser_base.py for
+why: Playwright's own Node driver process can't even start on a Mac running
+an older macOS, which is a real constraint on the machine this was built
+for, whereas Selenium talks straight to chromedriver/system Chrome with no
+such middleman).
+
 This WILL need tightening once you can actually see the rendered page
 during your first manual run — if products come back empty or wrong, open
 devtools on the real page, find the real card/price selectors, and tell me
@@ -25,16 +31,22 @@ BLOCKED_MARKERS = [
 ]
 
 
-def looks_blocked(page) -> bool:
-    title = (page.title() or "").lower()
-    body_sample = page.inner_text("body")[:2000].lower() if page.query_selector("body") else ""
+def looks_blocked(driver) -> bool:
+    title = (driver.title or "").lower()
+    try:
+        body_sample = driver.execute_script(
+            "return document.body ? document.body.innerText.slice(0, 2000) : ''"
+        ).lower()
+    except Exception:  # noqa: BLE001 - diagnostics should never crash on this
+        body_sample = ""
     haystack = title + " " + body_sample
     return any(marker in haystack for marker in BLOCKED_MARKERS)
 
 
-def _from_json_ld(page) -> list[ScrapedProduct]:
-    scripts = page.eval_on_selector_all(
-        'script[type="application/ld+json"]', "els => els.map(e => e.textContent)"
+def _from_json_ld(driver) -> list[ScrapedProduct]:
+    scripts = driver.execute_script(
+        """return [...document.querySelectorAll('script[type="application/ld+json"]')]
+           .map(e => e.textContent)"""
     )
     products = []
     for raw in scripts:
@@ -57,7 +69,7 @@ def _from_json_ld(page) -> list[ScrapedProduct]:
                 products.append(ScrapedProduct(
                     external_id=node.get("sku") or node.get("name", "")[:60],
                     name=node.get("name", ""),
-                    product_url=offer.get("url") or node.get("url") or page.url,
+                    product_url=offer.get("url") or node.get("url") or driver.current_url,
                     price_amd=float(price),
                     brand=(node.get("brand") or {}).get("name") if isinstance(node.get("brand"), dict) else node.get("brand"),
                     image_url=node.get("image") if isinstance(node.get("image"), str) else None,
@@ -66,17 +78,16 @@ def _from_json_ld(page) -> list[ScrapedProduct]:
     return products
 
 
-def _from_price_heuristic(page) -> list[ScrapedProduct]:
+def _from_price_heuristic(driver) -> list[ScrapedProduct]:
     """Fallback: find anchor tags that contain both a plausible product name
     and a nearby AMD-looking price. Deliberately conservative — better to
     return fewer, correct products than many wrong ones."""
-    cards = page.eval_on_selector_all(
-        "a",
-        """els => els.map(e => ({
+    cards = driver.execute_script(
+        """return [...document.querySelectorAll('a')].map(e => ({
             href: e.href,
             text: e.innerText,
             cardText: (e.closest('li,div,article') || e).innerText
-        })).filter(x => x.text && x.text.trim().length > 8)""",
+        })).filter(x => x.text && x.text.trim().length > 8)"""
     )
     seen = set()
     products = []
@@ -102,8 +113,8 @@ def _from_price_heuristic(page) -> list[ScrapedProduct]:
     return products
 
 
-def extract(page) -> list[ScrapedProduct]:
-    products = _from_json_ld(page)
+def extract(driver) -> list[ScrapedProduct]:
+    products = _from_json_ld(driver)
     if products:
         return products
-    return _from_price_heuristic(page)
+    return _from_price_heuristic(driver)
