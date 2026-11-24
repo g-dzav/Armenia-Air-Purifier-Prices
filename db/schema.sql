@@ -112,8 +112,25 @@ alter table fx_rates enable row level security;
 alter table scrape_runs enable row level security;
 alter table site_sessions enable row level security;
 
+drop policy if exists "public read products" on products;
+drop policy if exists "public read price_snapshots" on price_snapshots;
+drop policy if exists "public read fx_rates" on fx_rates;
+drop policy if exists "public read scrape_runs" on scrape_runs;
+
 create policy "public read products" on products for select using (true);
 create policy "public read price_snapshots" on price_snapshots for select using (true);
 create policy "public read fx_rates" on fx_rates for select using (true);
 create policy "public read scrape_runs" on scrape_runs for select using (true);
 -- no policy on site_sessions: it holds cookies, so it's not exposed to anon/public at all.
+
+-- RLS policies alone aren't enough — Postgres also requires an explicit
+-- object-level GRANT before a role can touch a table/view at all (RLS only
+-- filters rows once access is already permitted). This is what the anon key
+-- actually uses for reads.
+grant usage on schema public to anon, authenticated, service_role;
+grant select on products, price_snapshots, fx_rates, scrape_runs, latest_prices to anon, authenticated;
+
+-- service_role bypasses RLS but still needs the object-level grant to touch
+-- these tables at all. It's the scraper's own key — full read/write on
+-- everything, including site_sessions (holds cookies), which anon never gets.
+grant all on products, price_snapshots, fx_rates, scrape_runs, site_sessions to service_role;
