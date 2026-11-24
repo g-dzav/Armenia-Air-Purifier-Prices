@@ -16,8 +16,9 @@ accounts or paste in secrets for you, so this part's manual, but it's quick.
 
 ## 2. GitHub (the repo + the daily cron + the dashboard hosting)
 
-1. Create a new repo (private or public, your call — public costs nothing
-   extra and makes the dashboard link work without any auth).
+1. Create a new repo (private or public, your call — GitHub Pages on the free
+   plan works the same either way, and the dashboard itself is gated by
+   Supabase sign-in regardless — see step 4 below).
 2. Push this project to it:
    ```bash
    git remote add origin <your-repo-url>
@@ -49,6 +50,31 @@ accounts or paste in secrets for you, so this part's manual, but it's quick.
 - Run the weekly manual pass locally (see README) for Zigzag/Eldorado/
   AllSell/Ozon/Homemart/Wildberries — those need a human to clear a
   challenge at least once before they'll have any data at all.
+
+## 4. Access control (sign-in gate)
+
+The dashboard requires a real Supabase Auth session before it'll show any
+data — it's enforced in Postgres (RLS), not just in the page's own JS, so
+the public anon key genuinely can't read anything by itself. Two settings
+need to be set in the Supabase dashboard (not something doable via the REST
+API, so this is a manual click):
+
+1. **Authentication → URL Configuration.** Set `Site URL` to your GitHub
+   Pages URL (e.g. `https://g-dzav.github.io/Armenia-Air-Purifier-Prices/`)
+   and add the same URL under `Redirect URLs`. Without this, the sign-in
+   email's magic link won't be allowed to redirect back to the dashboard.
+2. **Authentication → Sign In / Providers → Email.** Turn **off** "Allow new
+   users to sign up" — otherwise anyone who finds the link can type in their
+   own email and let themselves in, which defeats the point. With it off,
+   only people you've explicitly added can sign in.
+3. **Authentication → Users → Add user → Send invite.** Add an email for
+   each person who should have access (yourself included). They'll get a
+   Supabase invite email; after that, typing their email into the
+   dashboard's sign-in box sends them a one-time magic link each time they
+   want in (no password to manage).
+4. Re-run the full [`db/schema.sql`](db/schema.sql) once more in the SQL
+   editor — it now requires a signed-in session to read any table, where it
+   used to allow anyone with the anon key.
 
 ## Ongoing cost
 

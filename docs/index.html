@@ -46,12 +46,38 @@
   .health .chip.stale { color: var(--warn); border-color: rgba(224,169,64,.3); }
   .health .chip.dead { color: var(--bad); border-color: rgba(239,91,91,.3); }
   .empty { color: var(--text-dim); padding: 40px; text-align:center; }
+
+  .auth-screen { max-width: 360px; margin: 18vh auto; padding: 0 20px; text-align:center; }
+  .auth-screen h1 { font-size: 18px; margin-bottom: 18px; }
+  .auth-screen input {
+    width:100%; background: var(--panel); border:1px solid var(--border); color:var(--text);
+    padding: 10px 12px; border-radius: 8px; font-size: 14px; margin-bottom: 10px;
+  }
+  .auth-screen button {
+    width:100%; background: var(--accent); color:#06121f; border:none; font-weight:600;
+    padding: 10px 12px; border-radius: 8px; font-size: 14px; cursor:pointer;
+  }
+  .auth-status { color: var(--text-dim); font-size: 12.5px; margin-top: 12px; min-height: 18px; }
+  .sign-out { margin-left:auto; color: var(--text-dim); font-size:12px; background:none; border:none; cursor:pointer; text-decoration:underline; }
 </style>
 </head>
 <body>
-<header>
+
+<div id="authGate" class="auth-screen">
   <h1>Armenia Air Purifier Prices</h1>
-  <div class="sub">Internal price-comparison tool &middot; updated daily from each site's own listing &middot; prices shown in AMD with USD / KZT equivalents</div>
+  <p class="sub" style="margin-bottom:18px">Sign in with the email your admin added — you'll get a one-time link, no password to remember.</p>
+  <input id="authEmail" type="email" placeholder="you@example.com" autocomplete="email">
+  <button id="authSubmit">Send sign-in link</button>
+  <div class="auth-status" id="authStatus"></div>
+</div>
+
+<div id="app" style="display:none">
+<header style="display:flex; align-items:flex-start; gap:12px">
+  <div>
+    <h1>Armenia Air Purifier Prices</h1>
+    <div class="sub">Internal price-comparison tool &middot; updated daily from each site's own listing &middot; prices shown in AMD with USD / KZT equivalents</div>
+  </div>
+  <button class="sign-out" id="signOut">Sign out</button>
 </header>
 
 <div class="health" id="health"></div>
@@ -80,6 +106,7 @@
   </table>
   <div class="empty" id="emptyMsg" style="display:none">No data yet — run the scraper, or widen your filters.</div>
 </main>
+</div><!-- #app -->
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
@@ -207,8 +234,47 @@ document.getElementById("search").addEventListener("input", render);
 document.getElementById("siteFilter").addEventListener("change", render);
 document.getElementById("sortBy").addEventListener("change", render);
 
-loadHealth();
-loadRows();
+// --- Auth gate. The dashboard's own UI never decides who sees data — that's
+// enforced server-side by Postgres Row Level Security (db/schema.sql requires
+// auth.role() = 'authenticated'), so the anon key alone can no longer read
+// anything. This just wires up the sign-in form and shows/hides the page.
+function showApp() {
+  document.getElementById("authGate").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  loadHealth();
+  loadRows();
+}
+function showAuthGate() {
+  document.getElementById("app").style.display = "none";
+  document.getElementById("authGate").style.display = "block";
+}
+
+document.getElementById("authSubmit").addEventListener("click", async () => {
+  const email = document.getElementById("authEmail").value.trim();
+  const statusEl = document.getElementById("authStatus");
+  if (!email) { statusEl.textContent = "Enter your email first."; return; }
+  statusEl.textContent = "Sending...";
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.href },
+  });
+  statusEl.textContent = error
+    ? "Couldn't send link: " + error.message
+    : "Check your email for a sign-in link.";
+});
+
+document.getElementById("signOut").addEventListener("click", async () => {
+  await sb.auth.signOut();
+  showAuthGate();
+});
+
+sb.auth.onAuthStateChange((_event, session) => {
+  if (session) showApp(); else showAuthGate();
+});
+
+sb.auth.getSession().then(({ data: { session } }) => {
+  if (session) showApp(); else showAuthGate();
+});
 </script>
 </body>
 </html>

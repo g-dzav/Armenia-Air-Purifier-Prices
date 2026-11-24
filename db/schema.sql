@@ -70,7 +70,14 @@ create table if not exists site_sessions (
 -- Convenience view: latest snapshot per product, joined with product info.
 -- Explicit column list (rather than p.*, s.*) because both tables have an
 -- `id` column, which errors as an ambiguous duplicate in a wildcard select.
-create or replace view latest_prices as
+--
+-- security_invoker=true matters here: by default a Postgres view checks
+-- permissions as its OWNER (not the caller), which would make the view
+-- silently bypass the signed-in-only RLS policies below for everyone,
+-- auth'd or not. This makes it enforce RLS as the actual calling role instead.
+create or replace view latest_prices
+with (security_invoker = true)
+as
 select
   p.id,
   p.site,
@@ -103,9 +110,10 @@ join lateral (
   limit 1
 ) s on true;
 
--- Row Level Security: the dashboard uses the public anon key and should only
--- ever be able to read. All writes go through the service role key, which
--- bypasses RLS entirely (used only by the scraper, never shipped to the browser).
+-- Row Level Security: the dashboard requires a real signed-in Supabase Auth
+-- session (see docs/index.html) — the anon key by itself can no longer read
+-- anything. All writes go through the service role key, which bypasses RLS
+-- entirely (used only by the scraper, never shipped to the browser).
 alter table products enable row level security;
 alter table price_snapshots enable row level security;
 alter table fx_rates enable row level security;
@@ -117,16 +125,18 @@ drop policy if exists "public read price_snapshots" on price_snapshots;
 drop policy if exists "public read fx_rates" on fx_rates;
 drop policy if exists "public read scrape_runs" on scrape_runs;
 
-create policy "public read products" on products for select using (true);
-create policy "public read price_snapshots" on price_snapshots for select using (true);
-create policy "public read fx_rates" on fx_rates for select using (true);
-create policy "public read scrape_runs" on scrape_runs for select using (true);
--- no policy on site_sessions: it holds cookies, so it's not exposed to anon/public at all.
+create policy "signed-in read products" on products for select using (auth.role() = 'authenticated');
+create policy "signed-in read price_snapshots" on price_snapshots for select using (auth.role() = 'authenticated');
+create policy "signed-in read fx_rates" on fx_rates for select using (auth.role() = 'authenticated');
+create policy "signed-in read scrape_runs" on scrape_runs for select using (auth.role() = 'authenticated');
+-- no policy on site_sessions: it holds cookies, so it's not exposed to anyone but service_role.
 
 -- RLS policies alone aren't enough — Postgres also requires an explicit
 -- object-level GRANT before a role can touch a table/view at all (RLS only
--- filters rows once access is already permitted). This is what the anon key
--- actually uses for reads.
+-- filters rows once access is already permitted). anon keeps the grant
+-- (needed for supabase-js's auth calls to work pre-login) but RLS above
+-- means an anon session reads zero rows regardless; only a real
+-- authenticated session actually sees data.
 grant usage on schema public to anon, authenticated, service_role;
 grant select on products, price_snapshots, fx_rates, scrape_runs, latest_prices to anon, authenticated;
 
