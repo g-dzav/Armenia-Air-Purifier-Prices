@@ -38,7 +38,7 @@
   .stat-tile .label { color:var(--text-dim); font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; }
   .stat-tile .value { font-size:24px; font-weight:700; margin-top:4px; }
 
-  .charts-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap:16px; }
+  .charts-grid { display:flex; flex-direction:column; gap:16px; }
   .chart-panel {
     background:var(--panel); border:1px solid var(--grid-line); border-radius:6px; padding:16px;
   }
@@ -46,7 +46,7 @@
   .chart-panel .chart-sub { color:var(--text-dim); font-size:11.5px; margin-bottom:12px; }
 
   .bar-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
-  .bar-label { width:110px; flex-shrink:0; font-size:12px; text-align:right; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar-label { width:260px; flex-shrink:0; font-size:12px; text-align:right; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .bar-track { flex:1; background:var(--panel-alt); border-radius:4px; height:20px; position:relative; }
   .bar-fill { height:20px; border-radius:4px; min-width:2px; }
   .bar-value { position:absolute; left:calc(100% + 8px); top:50%; transform:translateY(-50%); font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--text-dim); white-space:nowrap; }
@@ -59,7 +59,7 @@
     border-radius:4px; pointer-events:none; z-index:60; white-space:nowrap;
   }
 
-  svg.linechart { width:100%; height:220px; overflow:visible; }
+  svg.linechart { width:100%; height:340px; overflow:visible; }
   .empty-chart { color:var(--text-dim); font-size:12px; padding:30px 10px; text-align:center; }
 
   .auth-screen { max-width: 340px; margin: 18vh auto; padding: 0 20px; text-align:center; }
@@ -101,7 +101,7 @@
     <div class="chart-panel">
       <h2>Average price by product model</h2>
       <div class="chart-sub">Grouped by manufacturer SKU where known (lets the same model sold by two retailers average together) — otherwise one bar per listing</div>
-      <div id="chartPriceByModel" style="max-height:340px; overflow-y:auto; padding-right:4px"></div>
+      <div id="chartPriceByModel" style="max-height:480px; overflow-y:auto; padding-right:4px"></div>
     </div>
     <div class="chart-panel">
       <h2>Products tracked by brand</h2>
@@ -115,7 +115,7 @@
     </div>
     <div class="chart-panel">
       <h2>Average price over time</h2>
-      <div class="chart-sub">By retailer, one point per day scraped</div>
+      <div class="chart-sub">By product (same grouping as the chart above) — the 8 with the most price history so far, one point per day scraped</div>
       <div id="chartTrend"></div>
     </div>
   </div>
@@ -129,15 +129,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_YlpsZ72PY7Y1TfjDrCoNOA_Sk9rwh6Q";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const CAT_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
-
-// Color assignment is fixed once per page load, by alphabetical site name —
-// so a series' color never shifts when a chart's own data changes shape
-// (the "color follows the entity" rule).
-let siteColorMap = {};
-function colorForSite(site) {
-  if (!(site in siteColorMap)) siteColorMap[site] = CAT_COLORS[Object.keys(siteColorMap).length % CAT_COLORS.length];
-  return siteColorMap[site];
-}
 
 let tooltipEl = null;
 function showTooltip(evt, text) {
@@ -191,7 +182,7 @@ function renderLineChart(container, series, { valueFmt = (v) => v.toLocaleString
     return;
   }
 
-  const W = container.clientWidth || 500, H = 220;
+  const W = container.clientWidth || 500, H = 340;
   const padL = 46, padR = 12, padT = 10, padB = 24;
   const plotW = W - padL - padR, plotH = H - padT - padB;
 
@@ -259,7 +250,7 @@ function renderStatTile(label, value) {
 async function loadAnalytics() {
   const [{ data: latest, error: e1 }, { data: products }, { data: snapshots }] = await Promise.all([
     sb.from("latest_prices").select("*"),
-    sb.from("products").select("id, site, brand"),
+    sb.from("products").select("id, site, brand, model, name"),
     sb.from("price_snapshots").select("product_id, price_amd, scraped_at").order("scraped_at", { ascending: true }),
   ]);
 
@@ -330,19 +321,35 @@ async function loadAnalytics() {
   if (unknownCount > 0) stockRows.push({ label: "Unknown", value: unknownCount, color: "#9aa3ad" });
   renderBarChart(document.getElementById("chartStock"), stockRows);
 
-  // ---------- Price trend over time, by retailer ----------
-  const productSite = Object.fromEntries((products || []).map(p => [p.id, p.site]));
-  const bySiteDay = {}; // site -> day -> [prices]
+  // ---------- Price trend over time, by product ----------
+  // Same grouping key as the "price by model" chart: manufacturer SKU where
+  // the scraper found one, else the product name - so a model sold by two
+  // retailers traces one line, not two.
+  const productInfo = Object.fromEntries((products || []).map(p => {
+    const key = p.model || p.name;
+    const label = p.model ? `${key} (${p.brand || "?"})` : key;
+    return [p.id, { key, label }];
+  }));
+  const byProductDay = {}; // key -> { label, days: { day -> [prices] } }
   (snapshots || []).forEach(s => {
-    const site = productSite[s.product_id];
-    if (!site || s.price_amd == null) return;
+    const info = productInfo[s.product_id];
+    if (!info || s.price_amd == null) return;
+    const bucket = (byProductDay[info.key] ||= { label: info.label, days: {} });
     const day = s.scraped_at.slice(0, 10);
-    ((bySiteDay[site] ||= {})[day] ||= []).push(s.price_amd);
+    (bucket.days[day] ||= []).push(s.price_amd);
   });
-  const trendSeries = Object.entries(bySiteDay).map(([site, byDay]) => ({
-    label: site,
-    color: colorForSite(site),
-    points: Object.entries(byDay).map(([day, vals]) => ({ x: day, y: vals.reduce((a, b) => a + b, 0) / vals.length })),
+
+  // Capped to the 8 products with the most price history, both to fit the
+  // 8-slot categorical palette and because a product with only one snapshot
+  // so far has no trend to show yet - it'll earn a spot as more days accumulate.
+  const topProducts = Object.values(byProductDay)
+    .map(p => ({ ...p, pointCount: Object.keys(p.days).length }))
+    .sort((a, b) => b.pointCount - a.pointCount)
+    .slice(0, 8);
+  const trendSeries = topProducts.map((p, i) => ({
+    label: p.label,
+    color: CAT_COLORS[i % CAT_COLORS.length],
+    points: Object.entries(p.days).map(([day, vals]) => ({ x: day, y: vals.reduce((a, b) => a + b, 0) / vals.length })),
   }));
   renderLineChart(document.getElementById("chartTrend"), trendSeries, { valueFmt: fmtAmd });
 }
