@@ -7,6 +7,8 @@ a `.free-shipping .delivery-by` line.
 """
 from __future__ import annotations
 
+from datetime import date, datetime
+
 import httpx
 from bs4 import BeautifulSoup
 
@@ -16,6 +18,25 @@ from .base import ScrapedProduct
 SITE_NAME = "microless"
 LISTING_URL = "https://am.microless.com/en/air-purifiers/"
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; price-tracker/1.0)"}
+
+
+def _days_until(date_text: str) -> str | None:
+    """Microless shows a calendar date ("Nov 27"), but every other site in
+    this tracker shows a day-count ("2-3 days") - convert to the same shape
+    so shipping times are comparable across sites, not a mix of the two."""
+    today = date.today()
+    for fmt in ("%b %d", "%B %d"):
+        try:
+            parsed = datetime.strptime(date_text, fmt).replace(year=today.year).date()
+        except ValueError:
+            continue
+        if parsed < today:
+            parsed = parsed.replace(year=today.year + 1)
+        days = (parsed - today).days
+        if days <= 0:
+            return "today"
+        return f"{days} day" + ("s" if days != 1 else "")
+    return None
 
 
 def scrape() -> list[ScrapedProduct]:
@@ -51,7 +72,8 @@ def scrape() -> list[ScrapedProduct]:
         shipping_time_text = None
         delivery_el = card.select_one(".delivery-by")
         if delivery_el:
-            shipping_time_text = delivery_el.get_text(" ", strip=True).replace("Delivered by", "").strip()
+            raw = delivery_el.get_text(" ", strip=True).replace("Delivered by", "").strip()
+            shipping_time_text = _days_until(raw) or raw
 
         img_el = card.select_one("img")
         image_url = img_el.get("src") if img_el else None

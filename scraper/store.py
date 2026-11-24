@@ -5,12 +5,15 @@ from __future__ import annotations
 
 from . import db
 from .fx import convert_amd
+from .normalize import is_excluded_accessory
 
 
 def store_products(site_name: str, products, fx: dict, source: str) -> int:
     count = 0
     for prod in products:
         if prod.price_amd is None:
+            continue
+        if is_excluded_accessory(prod.name, prod.price_amd):
             continue
         product_id = db.upsert_product(
             site=site_name, external_id=prod.external_id, brand=prod.brand,
