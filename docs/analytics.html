@@ -45,11 +45,11 @@
   .chart-panel h2 { font-size:13px; margin:0 0 2px; font-weight:700; }
   .chart-panel .chart-sub { color:var(--text-dim); font-size:11.5px; margin-bottom:12px; }
 
-  .bar-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+  .bar-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; width:100%; }
   .bar-label { width:260px; flex-shrink:0; font-size:12px; text-align:right; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .bar-track { flex:1; background:var(--panel-alt); border-radius:4px; height:20px; position:relative; }
+  .bar-track { flex:1 1 auto; min-width:0; background:var(--panel-alt); border-radius:4px; height:20px; }
   .bar-fill { height:20px; border-radius:4px; min-width:2px; }
-  .bar-value { position:absolute; left:calc(100% + 8px); top:50%; transform:translateY(-50%); font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--text-dim); white-space:nowrap; }
+  .bar-value { flex:0 0 auto; width:100px; font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--text-dim); white-space:nowrap; }
 
   .legend { display:flex; gap:14px; flex-wrap:wrap; margin-top:10px; font-size:11.5px; color:var(--text-dim); }
   .legend .swatch { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:middle; }
@@ -99,9 +99,9 @@
   <div class="stat-row" id="statRow"></div>
   <div class="charts-grid">
     <div class="chart-panel">
-      <h2>Average price by product model</h2>
-      <div class="chart-sub">Grouped by manufacturer SKU where known (lets the same model sold by two retailers average together) — otherwise one bar per listing</div>
-      <div id="chartPriceByModel" style="max-height:480px; overflow-y:auto; padding-right:4px"></div>
+      <h2>Average price by product brand</h2>
+      <div class="chart-sub">Across all currently tracked products, AMD</div>
+      <div id="chartPriceByBrand" style="max-height:480px; overflow-y:auto; padding-right:4px"></div>
     </div>
     <div class="chart-panel">
       <h2>Products tracked by brand</h2>
@@ -115,7 +115,7 @@
     </div>
     <div class="chart-panel">
       <h2>Average price over time</h2>
-      <div class="chart-sub">By product (same grouping as the chart above) — the 8 with the most price history so far, one point per day scraped</div>
+      <div class="chart-sub">By brand, one point per day scraped — same colors as the charts above</div>
       <div id="chartTrend"></div>
     </div>
   </div>
@@ -163,8 +163,8 @@ function renderBarChart(container, rows, { valueFmt = (v) => v.toLocaleString("e
       <div class="bar-label" title="${row.label}">${row.label}</div>
       <div class="bar-track">
         <div class="bar-fill" style="width:${pct}%; background:${row.color}"></div>
-        <span class="bar-value">${valueFmt(row.value)}</span>
       </div>
+      <span class="bar-value">${valueFmt(row.value)}</span>
     `;
     const fill = wrap.querySelector(".bar-fill");
     fill.addEventListener("mousemove", (e) => showTooltip(e, `${row.label}: ${valueFmt(row.value)}`));
@@ -250,7 +250,7 @@ function renderStatTile(label, value) {
 async function loadAnalytics() {
   const [{ data: latest, error: e1 }, { data: products }, { data: snapshots }] = await Promise.all([
     sb.from("latest_prices").select("*"),
-    sb.from("products").select("id, site, brand, model, name"),
+    sb.from("products").select("id, brand"),
     sb.from("price_snapshots").select("product_id, price_amd, scraped_at").order("scraped_at", { ascending: true }),
   ]);
 
@@ -276,40 +276,44 @@ async function loadAnalytics() {
     knownStockCount ? Math.round((inStockCount / knownStockCount) * 100) + "%" : "—"
   ));
 
-  // ---------- Average price by product model ----------
-  // Most sites don't expose a manufacturer SKU, so this groups by `model`
-  // where the scraper found one (e.g. Karcher's SKU format matches across
-  // both Karcher's own store and VLV, so that model's bar is a genuine
-  // cross-retailer average) and falls back to the product name otherwise —
-  // every product still shows up, just not averaged with anything.
-  const byModel = {};
+  // Brand is the one identity reused across every chart below, so give it
+  // one fixed color mapping (alphabetical, deterministic) instead of each
+  // chart assigning its own — "Xiaomi" reads as the same color everywhere.
+  // Brands past the 8-slot categorical palette share a neutral gray rather
+  // than wrapping back to slot 1 (which would make two different brands
+  // look identical).
+  const BRAND_FALLBACK_COLOR = "#9aa3ad";
+  const brandColorMap = {};
+  [...new Set(latest.map(r => r.brand || "Unknown"))].sort().forEach((b, i) => {
+    brandColorMap[b] = i < CAT_COLORS.length ? CAT_COLORS[i] : BRAND_FALLBACK_COLOR;
+  });
+  const colorForBrand = (b) => brandColorMap[b || "Unknown"] || BRAND_FALLBACK_COLOR;
+
+  // ---------- Average price by product brand ----------
+  const byBrandPrice = {};
   latest.forEach(r => {
     if (r.price_amd == null) return;
-    const key = r.model || r.name;
-    (byModel[key] ||= { label: r.model ? `${key} (${r.brand || "?"})` : key, prices: [] }).prices.push(r.price_amd);
+    const b = r.brand || "Unknown";
+    (byBrandPrice[b] ||= []).push(r.price_amd);
   });
-  const priceByModelRows = Object.values(byModel)
-    .map(({ label, prices }) => ({
-      label, value: prices.reduce((a, b) => a + b, 0) / prices.length,
-      color: "#2a78d6", // single hue — this is one measure across many individual products, not a category comparison
-    }))
+  const priceByBrandRows = Object.entries(byBrandPrice)
+    .map(([label, prices]) => ({ label, value: prices.reduce((a, b) => a + b, 0) / prices.length, color: colorForBrand(label) }))
     .sort((a, b) => b.value - a.value);
-  renderBarChart(document.getElementById("chartPriceByModel"), priceByModelRows, { valueFmt: fmtAmd });
+  renderBarChart(document.getElementById("chartPriceByBrand"), priceByBrandRows, { valueFmt: fmtAmd });
 
   // ---------- Product count by brand (top 7 + Other) ----------
-  const byBrand = {};
+  const byBrandCount = {};
   latest.forEach(r => {
     const b = r.brand || "Unknown";
-    byBrand[b] = (byBrand[b] || 0) + 1;
+    byBrandCount[b] = (byBrandCount[b] || 0) + 1;
   });
-  let brandRows = Object.entries(byBrand).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
-  if (brandRows.length > 8) {
-    const head = brandRows.slice(0, 7);
-    const otherCount = brandRows.slice(7).reduce((a, r) => a + r.value, 0);
-    brandRows = [...head, { label: "Other", value: otherCount }];
+  let brandCountRows = Object.entries(byBrandCount).map(([label, value]) => ({ label, value, color: colorForBrand(label) })).sort((a, b) => b.value - a.value);
+  if (brandCountRows.length > 8) {
+    const head = brandCountRows.slice(0, 7);
+    const otherCount = brandCountRows.slice(7).reduce((a, r) => a + r.value, 0);
+    brandCountRows = [...head, { label: "Other", value: otherCount, color: BRAND_FALLBACK_COLOR }];
   }
-  brandRows.forEach((r, i) => r.color = CAT_COLORS[i % CAT_COLORS.length]);
-  renderBarChart(document.getElementById("chartCountByBrand"), brandRows);
+  renderBarChart(document.getElementById("chartCountByBrand"), brandCountRows);
 
   // ---------- Stock availability (status colors, reserved for state) ----------
   const outOfStockCount = latest.filter(r => r.in_stock === false).length;
@@ -318,38 +322,22 @@ async function loadAnalytics() {
     { label: "In stock", value: inStockCount, color: "var(--status-good)" },
     { label: "Out of stock", value: outOfStockCount, color: "var(--status-critical)" },
   ];
-  if (unknownCount > 0) stockRows.push({ label: "Unknown", value: unknownCount, color: "#9aa3ad" });
+  if (unknownCount > 0) stockRows.push({ label: "Unknown", value: unknownCount, color: BRAND_FALLBACK_COLOR });
   renderBarChart(document.getElementById("chartStock"), stockRows);
 
-  // ---------- Price trend over time, by product ----------
-  // Same grouping key as the "price by model" chart: manufacturer SKU where
-  // the scraper found one, else the product name - so a model sold by two
-  // retailers traces one line, not two.
-  const productInfo = Object.fromEntries((products || []).map(p => {
-    const key = p.model || p.name;
-    const label = p.model ? `${key} (${p.brand || "?"})` : key;
-    return [p.id, { key, label }];
-  }));
-  const byProductDay = {}; // key -> { label, days: { day -> [prices] } }
+  // ---------- Price trend over time, by brand ----------
+  const productBrand = Object.fromEntries((products || []).map(p => [p.id, p.brand || "Unknown"]));
+  const byBrandDay = {}; // brand -> day -> [prices]
   (snapshots || []).forEach(s => {
-    const info = productInfo[s.product_id];
-    if (!info || s.price_amd == null) return;
-    const bucket = (byProductDay[info.key] ||= { label: info.label, days: {} });
+    const brand = productBrand[s.product_id];
+    if (!brand || s.price_amd == null) return;
     const day = s.scraped_at.slice(0, 10);
-    (bucket.days[day] ||= []).push(s.price_amd);
+    ((byBrandDay[brand] ||= {})[day] ||= []).push(s.price_amd);
   });
-
-  // Capped to the 8 products with the most price history, both to fit the
-  // 8-slot categorical palette and because a product with only one snapshot
-  // so far has no trend to show yet - it'll earn a spot as more days accumulate.
-  const topProducts = Object.values(byProductDay)
-    .map(p => ({ ...p, pointCount: Object.keys(p.days).length }))
-    .sort((a, b) => b.pointCount - a.pointCount)
-    .slice(0, 8);
-  const trendSeries = topProducts.map((p, i) => ({
-    label: p.label,
-    color: CAT_COLORS[i % CAT_COLORS.length],
-    points: Object.entries(p.days).map(([day, vals]) => ({ x: day, y: vals.reduce((a, b) => a + b, 0) / vals.length })),
+  const trendSeries = Object.entries(byBrandDay).map(([brand, byDay]) => ({
+    label: brand,
+    color: colorForBrand(brand),
+    points: Object.entries(byDay).map(([day, vals]) => ({ x: day, y: vals.reduce((a, b) => a + b, 0) / vals.length })),
   }));
   renderLineChart(document.getElementById("chartTrend"), trendSeries, { valueFmt: fmtAmd });
 }
