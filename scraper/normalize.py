@@ -16,7 +16,17 @@ def guess_brand(name: str) -> str | None:
     for brand in KNOWN_BRANDS:
         if re.search(rf"\b{re.escape(brand)}\b", name, re.IGNORECASE):
             return "Karcher" if brand == "Kärcher" else brand
-    return name.split()[0] if name else None
+    # Fallback: the first word, but only if it's actually a plausible brand
+    # token (plain Latin letters/digits) - a Russian/Armenian generic-
+    # listing title's first word ("Очиститель", "Մաքրիչ") isn't a brand,
+    # it's just the local word for "purifier", so skip straight past any
+    # leading foreign-script words instead of returning one as if it were
+    # a brand name.
+    for word in name.split():
+        stripped = word.strip(",.()-")
+        if len(stripped) >= 2 and re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", stripped):
+            return stripped
+    return None
 
 
 def parse_amd(text: str) -> float | None:
