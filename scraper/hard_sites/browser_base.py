@@ -100,6 +100,27 @@ def _store_products(site_name: str, products, source: str) -> int:
     return store_products(site_name, products, fx, source)
 
 
+def _save_debug_dump(site_name: str, driver) -> str:
+    """Called when a manual run clears a challenge but scrape() still finds
+    nothing - saves the actual rendered page (HTML + screenshot) so the
+    real markup can be inspected and the site's selectors fixed, without
+    needing to replay the session (which often won't work anyway - cookies
+    like Cloudflare's cf_clearance are commonly IP-bound, so a session
+    captured on one network can't just be loaded and re-inspected from
+    another)."""
+    from datetime import datetime
+    from pathlib import Path
+
+    debug_dir = Path("debug")
+    debug_dir.mkdir(exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    html_path = debug_dir / f"{site_name}_{stamp}.html"
+    png_path = debug_dir / f"{site_name}_{stamp}.png"
+    html_path.write_text(driver.page_source, encoding="utf-8")
+    driver.save_screenshot(str(png_path))
+    return f"{html_path} and {png_path}"
+
+
 def run_manual(modules: list) -> None:
     """Visible-Chrome run for your weekly check-in. One window, one site at
     a time — solve whatever challenge appears, then press Enter in this
@@ -122,6 +143,14 @@ def run_manual(modules: list) -> None:
                 count = _store_products(mod.SITE_NAME, products, source="manual")
                 db.finish_run(run_id, "ok", count)
                 print(f"[{mod.SITE_NAME}] stored {count} price snapshots.")
+                if count == 0:
+                    debug_path = _save_debug_dump(mod.SITE_NAME, driver)
+                    print(
+                        f"[{mod.SITE_NAME}] the challenge cleared but the scraper found "
+                        f"zero products - its selectors likely need fixing. Saved the "
+                        f"real page to {debug_path} - send that file along so the "
+                        f"selectors can be corrected against real markup."
+                    )
             except Exception as exc:  # noqa: BLE001 - one bad site shouldn't kill the run
                 db.finish_run(run_id, "error", 0, error=str(exc))
                 print(f"[{mod.SITE_NAME}] FAILED: {exc}")
