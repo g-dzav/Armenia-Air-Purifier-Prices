@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from . import db
 from .fx import convert_amd
-from .normalize import is_excluded_accessory
+from .normalize import clean_display_name, is_excluded_accessory
 
 
 def store_products(site_name: str, products, fx: dict, source: str) -> int:
@@ -13,11 +13,14 @@ def store_products(site_name: str, products, fx: dict, source: str) -> int:
     for prod in products:
         if prod.price_amd is None:
             continue
+        # Exclusion detection needs the original name - the Armenian/Russian
+        # accessory keywords it looks for are exactly what clean_display_name
+        # strips out, so cleaning must happen only after this check passes.
         if is_excluded_accessory(prod.name, prod.price_amd):
             continue
         product_id = db.upsert_product(
             site=site_name, external_id=prod.external_id, brand=prod.brand,
-            model=prod.model, name=prod.name, product_url=prod.product_url,
+            model=prod.model, name=clean_display_name(prod.name), product_url=prod.product_url,
             image_url=prod.image_url,
         )
         price_usd, price_kzt = convert_amd(prod.price_amd, fx)

@@ -101,13 +101,12 @@ def _store_products(site_name: str, products, source: str) -> int:
 
 
 def _save_debug_dump(site_name: str, driver) -> str:
-    """Called when a manual run clears a challenge but scrape() still finds
-    nothing - saves the actual rendered page (HTML + screenshot) so the
-    real markup can be inspected and the site's selectors fixed, without
-    needing to replay the session (which often won't work anyway - cookies
-    like Cloudflare's cf_clearance are commonly IP-bound, so a session
-    captured on one network can't just be loaded and re-inspected from
-    another)."""
+    """Called after every manual-run site, regardless of outcome - saves the
+    actual rendered page (HTML + screenshot) so the real markup can be
+    inspected and a site's selectors fixed or verified, without needing to
+    replay the session (which often won't work anyway - cookies like
+    Cloudflare's cf_clearance are commonly IP-bound, so a session captured
+    on one network can't just be loaded and re-inspected from another)."""
     from datetime import datetime
     from pathlib import Path
 
@@ -143,14 +142,24 @@ def run_manual(modules: list) -> None:
                 count = _store_products(mod.SITE_NAME, products, source="manual")
                 db.finish_run(run_id, "ok", count)
                 print(f"[{mod.SITE_NAME}] stored {count} price snapshots.")
+                # Always saved, not just on count == 0: a "zero products" run
+                # is an obvious signal something's wrong, but a confidently
+                # wrong one isn't - Eldorado's generic-fallback parser once
+                # reported a healthy product count while actually scraping an
+                # unrelated "recommended products" sidebar with garbled,
+                # concatenated prices. A debug dump sitting unused costs
+                # nothing; a silently-wrong scrape that looked fine doesn't
+                # get noticed until someone reads the dashboard.
+                debug_path = _save_debug_dump(mod.SITE_NAME, driver)
                 if count == 0:
-                    debug_path = _save_debug_dump(mod.SITE_NAME, driver)
                     print(
                         f"[{mod.SITE_NAME}] the challenge cleared but the scraper found "
                         f"zero products - its selectors likely need fixing. Saved the "
                         f"real page to {debug_path} - send that file along so the "
                         f"selectors can be corrected against real markup."
                     )
+                else:
+                    print(f"[{mod.SITE_NAME}] (debug dump also saved to {debug_path}, just in case)")
             except Exception as exc:  # noqa: BLE001 - one bad site shouldn't kill the run
                 db.finish_run(run_id, "error", 0, error=str(exc))
                 print(f"[{mod.SITE_NAME}] FAILED: {exc}")
