@@ -2,14 +2,25 @@
 captcha-gated ones (manual weekly solve) and the plain JS-rendered ones
 (fully automated, no human needed).
 
-Uses Selenium driving system Chrome (via Selenium 4.6+'s built-in driver
-manager — no separate browser download/setup needed), not Playwright.
-Playwright was the original choice but its bundled Node driver process
-flat-out can't start on a Mac running an older macOS (a `dyld` symbol
-error, unrelated to any website) — a real constraint on the machine this
-was built on, so Selenium is both more portable here and avoids installing
-a second, large browser binary when a perfectly good Chrome is likely
-already on the machine.
+Uses undetected-chromedriver (a patched Selenium that strips out the
+`navigator.webdriver` flag and other automation tells), not plain Selenium
+or Playwright. Plain Selenium was the first attempt, and it technically
+worked — until a real manual run got stuck in a Cloudflare verification
+loop: solving the checkbox correctly did nothing, because Cloudflare's
+managed challenge wasn't actually failing the click, it was detecting that
+the browser itself was automated and re-challenging regardless of what a
+human did in it. undetected-chromedriver patches that out (confirmed live:
+`navigator.webdriver` reads `false` instead of `true`). Playwright was
+ruled out earlier still — its bundled Node driver process can't even start
+on a Mac running an older macOS (a `dyld` symbol error, unrelated to any
+website).
+
+We deliberately do NOT override the User-Agent string here: spoofing an
+arbitrary/stale UA while the real installed Chrome binary answers every
+other fingerprinting question (Client Hints, JS feature detection, GPU
+info, ...) is itself an inconsistency sharp bot-detection can catch -
+undetected-chromedriver's whole premise is "just look like the real,
+unmodified browser," so let it.
 
 Two entrypoints:
   run_manual(modules)      -- a visible Chrome window, for your weekly
@@ -29,26 +40,59 @@ but the manual weekly run is the reliable fallback regardless.
 """
 from __future__ import annotations
 
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+import os
+import re
+import shutil
+import subprocess
+
+# undetected-chromedriver's own update-check needs valid CA certs to reach
+# GitHub; on some local Python installs (notably python.org's macOS
+# installer) the system cert store isn't wired up, so fall back to
+# certifi's bundle rather than erroring - this is a no-op if the system
+# certs already work fine (e.g. on GitHub Actions' ubuntu-latest runners).
+try:
+    import certifi
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+except ImportError:
+    pass
+
+import undetected_chromedriver as uc
 
 from .. import db
 from ..fx import fetch_and_store_today
 from ..store import store_products
 
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-)
+
+def _detect_chrome_major_version() -> int | None:
+    """undetected-chromedriver needs to patch a chromedriver binary that
+    matches the installed Chrome's major version - auto-detection in some
+    uc releases picks the latest release instead of the one actually
+    installed, so detect it explicitly rather than trust that."""
+    candidates = [
+        "google-chrome", "google-chrome-stable", "chromium-browser",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    ]
+    for exe in candidates:
+        path = exe if exe.startswith("/") else shutil.which(exe)
+        if not path:
+            continue
+        try:
+            out = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=10).stdout
+            match = re.search(r"(\d+)\.", out)
+            if match:
+                return int(match.group(1))
+        except Exception:  # noqa: BLE001 - fall through to uc's own auto-detect
+            continue
+    return None
 
 
-def _make_driver(headless: bool) -> webdriver.Chrome:
-    opts = Options()
+def _make_driver(headless: bool) -> uc.Chrome:
+    opts = uc.ChromeOptions()
     if headless:
         opts.add_argument("--headless=new")
-    opts.add_argument(f"--user-agent={USER_AGENT}")
     opts.add_argument("--window-size=1280,1600")
-    return webdriver.Chrome(options=opts)
+    major = _detect_chrome_major_version()
+    return uc.Chrome(options=opts, version_main=major) if major else uc.Chrome(options=opts)
 
 
 def _store_products(site_name: str, products, source: str) -> int:
@@ -73,7 +117,8 @@ def run_manual(modules: list) -> None:
                 )
                 products = mod.scrape(driver)
                 cookies = driver.get_cookies()
-                db.save_site_session(mod.SITE_NAME, cookies, USER_AGENT)
+                real_ua = driver.execute_script("return navigator.userAgent")
+                db.save_site_session(mod.SITE_NAME, cookies, real_ua)
                 count = _store_products(mod.SITE_NAME, products, source="manual")
                 db.finish_run(run_id, "ok", count)
                 print(f"[{mod.SITE_NAME}] stored {count} price snapshots.")

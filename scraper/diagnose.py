@@ -10,10 +10,8 @@ from __future__ import annotations
 
 import sys
 
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-
 from .hard_sites import allsell, eldorado, generic_extract, homemart, ozon, vlv, wildberries, zigzag
+from .hard_sites.browser_base import _make_driver
 
 ALL_SITES = {m.SITE_NAME: m for m in [zigzag, eldorado, allsell, ozon, homemart, vlv, wildberries]}
 
@@ -56,13 +54,7 @@ def diagnose_one(driver, mod) -> None:
 
 def main() -> None:
     names = sys.argv[1:] or list(ALL_SITES.keys())
-    opts = Options()
-    opts.add_argument("--headless=new")
-    opts.add_argument(
-        "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-    )
-    driver = webdriver.Chrome(options=opts)
+    driver = _make_driver(headless=True)
     try:
         for name in names:
             mod = ALL_SITES.get(name)
