@@ -124,6 +124,10 @@ drop policy if exists "public read products" on products;
 drop policy if exists "public read price_snapshots" on price_snapshots;
 drop policy if exists "public read fx_rates" on fx_rates;
 drop policy if exists "public read scrape_runs" on scrape_runs;
+drop policy if exists "signed-in read products" on products;
+drop policy if exists "signed-in read price_snapshots" on price_snapshots;
+drop policy if exists "signed-in read fx_rates" on fx_rates;
+drop policy if exists "signed-in read scrape_runs" on scrape_runs;
 
 create policy "signed-in read products" on products for select using (auth.role() = 'authenticated');
 create policy "signed-in read price_snapshots" on price_snapshots for select using (auth.role() = 'authenticated');
