@@ -5,3 +5,9 @@ python-dotenv>=1.0
 selenium>=4.15
 undetected-chromedriver>=3.5
 certifi>=2024.0
+# undetected-chromedriver's patcher imports distutils unconditionally,
+# which was removed from the standard library in Python 3.12 (the version
+# this project's CI runs on) - setuptools ships a compatibility shim that
+# restores it. Without this, `import undetected_chromedriver` itself raises
+# ModuleNotFoundError before any real work starts.
+setuptools>=70
