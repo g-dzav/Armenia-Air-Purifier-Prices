@@ -128,8 +128,6 @@ const SUPABASE_URL = "https://tnuatwacrkygbjwjeljp.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_YlpsZ72PY7Y1TfjDrCoNOA_Sk9rwh6Q";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const CAT_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
-
 let tooltipEl = null;
 function showTooltip(evt, text) {
   if (!tooltipEl) {
@@ -279,15 +277,17 @@ async function loadAnalytics() {
   // Brand is the one identity reused across every chart below, so give it
   // one fixed color mapping (alphabetical, deterministic) instead of each
   // chart assigning its own — "Xiaomi" reads as the same color everywhere.
-  // Brands past the 8-slot categorical palette share a neutral gray rather
-  // than wrapping back to slot 1 (which would make two different brands
-  // look identical).
-  const BRAND_FALLBACK_COLOR = "#9aa3ad";
+  // Every brand gets its own hue, evenly spaced around the color wheel by
+  // however many distinct brands actually exist - no fixed palette size to
+  // run out of, and no two brands ever share a color, however many there are.
+  const OTHER_BUCKET_COLOR = "#6b7280"; // only for the chart-local "Other" rollup below, never a real brand
   const brandColorMap = {};
-  [...new Set(latest.map(r => r.brand || "Unknown"))].sort().forEach((b, i) => {
-    brandColorMap[b] = i < CAT_COLORS.length ? CAT_COLORS[i] : BRAND_FALLBACK_COLOR;
+  const allBrandNames = [...new Set(latest.map(r => r.brand || "Unknown"))].sort();
+  allBrandNames.forEach((b, i) => {
+    const hue = Math.round((i * 360) / allBrandNames.length);
+    brandColorMap[b] = `hsl(${hue}, 68%, 42%)`;
   });
-  const colorForBrand = (b) => brandColorMap[b || "Unknown"] || BRAND_FALLBACK_COLOR;
+  const colorForBrand = (b) => brandColorMap[b || "Unknown"] || OTHER_BUCKET_COLOR;
 
   // ---------- Average price by product brand ----------
   const byBrandPrice = {};
@@ -311,7 +311,7 @@ async function loadAnalytics() {
   if (brandCountRows.length > 8) {
     const head = brandCountRows.slice(0, 7);
     const otherCount = brandCountRows.slice(7).reduce((a, r) => a + r.value, 0);
-    brandCountRows = [...head, { label: "Other", value: otherCount, color: BRAND_FALLBACK_COLOR }];
+    brandCountRows = [...head, { label: "Other", value: otherCount, color: OTHER_BUCKET_COLOR }];
   }
   renderBarChart(document.getElementById("chartCountByBrand"), brandCountRows);
 
@@ -322,7 +322,7 @@ async function loadAnalytics() {
     { label: "In stock", value: inStockCount, color: "var(--status-good)" },
     { label: "Out of stock", value: outOfStockCount, color: "var(--status-critical)" },
   ];
-  if (unknownCount > 0) stockRows.push({ label: "Unknown", value: unknownCount, color: BRAND_FALLBACK_COLOR });
+  if (unknownCount > 0) stockRows.push({ label: "Unknown", value: unknownCount, color: OTHER_BUCKET_COLOR });
   renderBarChart(document.getElementById("chartStock"), stockRows);
 
   // ---------- Price trend over time, by brand ----------
